@@ -1,0 +1,160 @@
+#include <Servo.h>
+Servo S1, S2, S3;
+
+// === PINS ===
+const byte S1pwm = 9;
+const byte S2pwm = 10;
+const byte S3pwm = 11;
+
+// === CALIBRATED CENTERS ===
+const int S1_CENTER_US = 1504;
+const int S2_CENTER_US = 1384;
+const int S3_CENTER_US = 1479;
+
+// === TRAJECTORY: 11 points (index 0 = start at z=200mm) ===
+const int NUM_POINTS = 11;
+
+const float S2_start[NUM_POINTS] = {
+  0.973, 0.997, 0.979, 0.973, 0.938,
+  0.911, 0.864, 0.796, 0.767, 0.680, 0.629
+};
+
+const float S3_start[NUM_POINTS] = {
+  0.999, 1.077, 1.143, 1.199, 1.206,
+  1.258, 1.249, 1.235, 1.284, 1.233, 1.225
+};
+
+// === Current angles ===
+float S1rad = 0.0f;
+float S2rad = 0.0f;
+float S3rad = 0.0f;
+
+// === Super smooth motion ===
+const float SMOOTH = 0.22f;        // higher = smoother & slower (perfect for demo)
+const float MAX_STEP = 0.018f;     // limits jerk, ~1 rad/s max speed
+unsigned long previousServoTime = 0;
+const unsigned long servoInterval = 15;
+
+// Serial
+String inputString = "";
+boolean stringComplete = false;
+
+void setup() {
+  S1.attach(S1pwm);
+  S2.attach(S2pwm);
+  S3.attach(S3pwm);
+  Serial.begin(115200);
+  inputString.reserve(20);
+
+  goToZero();
+  delay(1000);
+
+  Serial.println(F("========================================="));
+  Serial.println(F("   ROBOT ARM - TASK 5 FINAL DEMO"));
+  Serial.println(F("   Perfect straight vertical 10cm line"));
+  Serial.println(F("========================================="));
+  Serial.println(F("Commands:"));
+  Serial.println(F("   1 → Move to START position (z=200mm)"));
+  Serial.println(F("   2 → Run DOWNWARD vertical line (200→100mm)"));
+  Serial.println(F("   90 → Return to zero position"));
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  serialEvent();
+  if (stringComplete) {
+    inputString.trim();
+    
+    if (inputString == "1") {
+      Serial.println(F("\nMoving to START position (z=200mm)..."));
+      moveToWaypoint(0);                    // first point = z=200mm
+      Serial.println(F("Ready at START!\n"));
+    }
+    else if (inputString == "2") {
+      Serial.println(F("\nStarting 10cm STRAIGHT VERTICAL descent...\n"));
+      runFullVerticalLine();
+      Serial.println(F("\nVertical line finished perfectly!\n"));
+    }
+    else if (inputString == "90") {
+      Serial.println(F("Returning to zero..."));
+      goToZero();
+    }
+    
+    inputString = "";
+    stringComplete = false;
+  }
+
+  // Continuous smooth servo update
+  if (now - previousServoTime >= servoInterval) {
+    moveServo(S1, S1_CENTER_US, S1rad);
+    moveServo(S2, S2_CENTER_US, S2rad);
+    moveServo(S3, S3_CENTER_US, S3rad);
+    previousServoTime = now;
+  }
+}
+
+// Move smoothly to any waypoint (0 to 10)
+void moveToWaypoint(int idx) {
+  float target2 = S2_start[idx];
+  float target3 = S3_start[idx];
+
+  while (abs(S2rad - target2) > 0.004 || abs(S3rad - target3) > 0.004) {
+    S1rad = 0.0f;
+
+    S2rad += (target2 - S2rad) * SMOOTH;
+    S3rad += (target3 - S3rad) * SMOOTH;
+
+    float e2 = target2 - S2rad;
+    float e3 = target3 - S3rad;
+    if (abs(e2) > MAX_STEP) S2rad += (e2 > 0 ? MAX_STEP : -MAX_STEP);
+    if (abs(e3) > MAX_STEP) S3rad += (e3 > 0 ? MAX_STEP : -MAX_STEP);
+
+    moveServo(S1, S1_CENTER_US, S1rad);
+    moveServo(S2, S2_CENTER_US, S2rad);
+    moveServo(S3, S3_CENTER_US, S3rad);
+    delay(15);
+  }
+  delay(800);  // nice pause when arrived
+}
+
+// Run the full 10cm straight line
+void runFullVerticalLine() {
+  for (int i = 0; i < NUM_POINTS; i++) {
+    Serial.print(F("Point "));
+    Serial.print(i);
+    Serial.print(F(" → Z = "));
+    Serial.print(200 - i*10);
+    Serial.println(F(" mm"));
+
+    moveToWaypoint(i);  // uses the super-smooth function above
+  }
+}
+
+// REQUIRED FUNCTIONS — DO NOT CHANGE
+int moveServo(Servo servo, int refPulseWidth, float servoRadAngle) {
+  const float Pi = 3.142;
+  float minPulseWidth = refPulseWidth - 1000.0;
+  int cmd = (servoRadAngle + (Pi/2)) * (2000.0 / Pi) + minPulseWidth;
+  servo.writeMicroseconds(cmd);
+  return cmd;
+}
+
+void goToZero() {
+  S1rad = S2rad = S3rad = 0.0f;
+  S1.writeMicroseconds(S1_CENTER_US);
+  S2.writeMicroseconds(S2_CENTER_US);
+  S3.writeMicroseconds(S3_CENTER_US);
+  delay(800);
+}
+
+void serialEvent() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      stringComplete = true;
+      break;
+    }
+    inputString += c;
+  }
+}
