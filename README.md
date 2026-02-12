@@ -29,3 +29,6 @@ The arm:
 - Pulse-width mapping from radians to calibrated microseconds
 
 ## System Architecture
+![Robot Arm]()
+![Robot Arm]()
+![Robot Arm]()
