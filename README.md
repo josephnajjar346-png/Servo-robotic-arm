@@ -30,5 +30,5 @@ The arm:
 
 ## System Architecture
 ![Robot Arm](Screen Shot 2026-02-12 at 10.24.41 AM.png)
-![Robot Arm]()
+![Robot Arm](Screen Shot 2026-02-12 at 10.24.00 AM.png)
 ![Robot Arm]()
